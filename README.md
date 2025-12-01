@@ -23,37 +23,46 @@ It uses **Hugging Face Inference API**, **FAISS vector search**, **FastAPI**, an
 ### **Backend**
 - Python 3.10+
 - FastAPI
-- FAISS (Vector DB)
+- FAISS (Vector Database)
 - HuggingFace Inference API
 - PyPDF2
 - Uvicorn
 
 ### **Frontend**
-- Next.js 14
-- React
-- Tailwind CSS
+- Next.js 16
+- React 19
+- Tailwind CSS 4
+- TypeScript
 
 ---
 
 ##  Project Structure
 
-DocFlow/
+```
+DocFlow-AI/
 ├── backend/
-│ ├── rag_app.py
-│ ├── .env
-│ ├── venv/
-│ └── requirements.txt (optional)
-│
+│   ├── rag_app.py          # Main FastAPI application
+│   ├── .env               # Environment variables (HF_TOKEN)
+│   ├── venv/              # Python virtual environment
+│   └── __pycache__/       # Python cache files
 ├── frontend/
-│ ├── app/
-│ ├── components/
-│ ├── public/
-│ └── package.json
-│
-└── README.md
-
-yaml
-Copy code
+│   ├── app/
+│   │   ├── globals.css    # Global styles with Tailwind
+│   │   ├── layout.tsx     # Root layout component
+│   │   ├── page.tsx       # Main page component
+│   │   └── favicon.ico    # App favicon
+│   ├── public/            # Static assets
+│   ├── node_modules/      # Node.js dependencies
+│   ├── package.json       # Node.js dependencies and scripts
+│   ├── tailwind.config.js # Tailwind CSS configuration
+│   ├── postcss.config.mjs # PostCSS configuration
+│   ├── next.config.ts     # Next.js configuration
+│   ├── tsconfig.json      # TypeScript configuration
+│   ├── eslint.config.mjs  # ESLint configuration
+│   └── .gitignore         # Git ignore rules
+├── .git/                  # Git repository
+└── README.md             # Project documentation
+```
 
 ---
 
@@ -61,58 +70,38 @@ Copy code
 
 Create a `.env` file inside the **backend** folder:
 
+```bash
 HF_TOKEN=your_huggingface_api_key_here
+```
 
-vbnet
-Copy code
+##  Installation & Setup
 
-To load dotenv, the backend imports:
+### Clone the repository
+```bash
+git clone https://github.com/Malindup2/DocFlow-AI.git
+cd DocFlow-AI
+```
 
-```python
-from dotenv import load_dotenv
-load_dotenv()
- Installation & Setup
- Clone the repository
-bash
-Copy code
-git clone https://github.com/your-username/DocFlow.git
-cd DocFlow
- Backend Setup (FastAPI + FAISS)
-bash
-Copy code
+### Backend Setup (FastAPI + FAISS)
+```bash
 cd backend
 python -m venv venv
 venv\Scripts\activate   # Windows
 # OR
 source venv/bin/activate  # Mac/Linux
-Install dependencies:
-
-css
-Copy code
 pip install fastapi uvicorn[standard] faiss-cpu huggingface_hub pypdf2 python-multipart python-dotenv
-Run the backend:
-
-lua
-Copy code
 uvicorn rag_app:app --reload
-Backend will run at:
+```
 
-cpp
-Copy code
-http://127.0.0.1:8000
-Test using Swagger Docs:
+Backend will run at: `http://127.0.0.1:8000`
 
-arduino
-Copy code
-http://127.0.0.1:8000/docs
- Frontend Setup (Next.js + Tailwind)
-bash
-Copy code
+Test using Swagger Docs: `http://127.0.0.1:8000/docs`
+
+### Frontend Setup (Next.js + Tailwind)
+```bash
 cd ../frontend
 npm install
 npm run dev
-Frontend runs at:
+```
 
-arduino
-Copy code
-http://localhost:3000
+Frontend runs at: `http://localhost:3000`
