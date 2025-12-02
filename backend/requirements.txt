@@ -1,0 +1,25 @@
+# FastAPI and Web Server
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+python-multipart==0.0.20
+
+# PDF Processing
+PyPDF2==3.0.1
+
+# Machine Learning & Embeddings
+sentence-transformers==3.3.1
+transformers==4.47.1
+torch==2.5.1
+
+# Vector Database
+faiss-cpu==1.9.0
+numpy==1.26.4
+
+# Hugging Face Integration
+huggingface-hub==0.27.0
+
+# Environment Variables
+python-dotenv==1.0.1
+
+# CORS Support (included in FastAPI)
+# Additional dependencies installed automatically
