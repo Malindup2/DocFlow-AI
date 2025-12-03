@@ -4,6 +4,7 @@ import numpy as np
 from io import BytesIO
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from PyPDF2 import PdfReader
 from huggingface_hub import InferenceClient
 from dotenv import load_dotenv
@@ -13,26 +14,26 @@ load_dotenv()
 HF_TOKEN = os.getenv("HF_TOKEN")
 
 # 2. Initialize Hugging Face Clients
-
 embed_client = InferenceClient(
     "sentence-transformers/all-MiniLM-L6-v2",
     token=HF_TOKEN
 )
 
-# Chat Model (Zephyr - Free & High Quality)
+
+# Alternatives: "microsoft/Phi-3.5-mini-instruct" or "mistralai/Mistral-7B-Instruct-v0.3"
 llm_client = InferenceClient(
-    "google/gemma-2-2b-it",
+    "google/gemma-2-2b-it", 
     token=HF_TOKEN
 )
 
-# 3. Initialize FAISS Vector DB (In-Memory)
+# 3. FAISS Setup
 EMBED_DIM = 384
 index = faiss.IndexFlatL2(EMBED_DIM)
-chunks_store = []  # To store the actual text chunks
+chunks_store = [] 
 
 app = FastAPI()
 
-# 4. CORS Middleware (Allows Frontend to talk to Backend)
+# 4. CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  
@@ -41,15 +42,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Helper Functions ---
+# 5. Define Request Model (Fixes 422 Error)
+class QueryRequest(BaseModel):
+    query: str
 
+# --- Helpers ---
 def embed_text(text: str):
-    """Converts text to a vector using the embedding model."""
     emb = embed_client.feature_extraction(text)
     return np.array(emb).astype("float32")
 
 def extract_pdf_text(pdf_bytes):
-    """Extracts raw text from a PDF file."""
     reader = PdfReader(BytesIO(pdf_bytes))
     text = ""
     for page in reader.pages:
@@ -58,25 +60,19 @@ def extract_pdf_text(pdf_bytes):
     return text
 
 def chunk_text(text, size=500):
-    """Splits long text into smaller chunks."""
     return [text[i:i + size] for i in range(0, len(text), size)]
 
 # --- Endpoints ---
-
 @app.post("/upload")
 async def upload(file: UploadFile = File(...)):
-    """Handles PDF upload, extraction, and indexing."""
-    # Read file bytes
     pdf_bytes = await file.read()
-
-    # Extract text
     pdf_text = extract_pdf_text(pdf_bytes)
-
-    # Chunk text
     chunks = chunk_text(pdf_text)
 
-    # Generate embeddings and save to FAISS
-    # (Note: In a real app, you'd batch this to be faster)
+    # Clear previous index to avoid mixing documents
+    index.reset()
+    chunks_store.clear()
+
     for c in chunks:
         vec = embed_text(c)
         index.add(vec.reshape(1, -1))
@@ -85,26 +81,26 @@ async def upload(file: UploadFile = File(...)):
     return {"status": "ok", "chunks": len(chunks)}
 
 @app.post("/ask")
-async def ask(query: str):
-    """Handles the RAG (Retrieval Augmented Generation) logic."""
+async def ask(request: QueryRequest):
+    # Check if doc exists
     if index.ntotal == 0:
         return {"answer": "Please upload a document first."}
 
-    # 1. Embed user query
+    query = request.query
+    
+    # 1. Embed query
     query_vec = embed_text(query).reshape(1, -1)
 
-    # 2. Search FAISS for the 3 most relevant chunks
+    # 2. Search FAISS
     D, I = index.search(query_vec, 3)
     retrieved = [chunks_store[i] for i in I[0]]
-    
-    # 3. Combine retrieved chunks into a single context block
     context = "\n---\n".join(retrieved)
 
-    # 4. Prepare the Chat Prompt
+    # 3. Chat Prompt
     messages = [
         {
             "role": "system", 
-            "content": "You are a helpful AI assistant. Answer the user's question accurately using ONLY the context provided below. If the answer is not in the context, say you don't know."
+            "content": "You are a helpful AI assistant. Answer based ONLY on the context provided."
         },
         {
             "role": "user", 
@@ -112,14 +108,11 @@ async def ask(query: str):
         }
     ]
 
-    # 5. Call the LLM (Using chat_completion, NOT text_generation)
+    # 4. Generate Answer
     response = llm_client.chat_completion(
         messages, 
         max_tokens=200,
         temperature=0.2
     )
 
-    # 6. Extract the answer
-    answer = response.choices[0].message.content
-
-    return {"answer": answer}
+    return {"answer": response.choices[0].message.content}

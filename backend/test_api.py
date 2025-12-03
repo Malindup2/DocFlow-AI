@@ -11,21 +11,29 @@ if not token:
     print(" ERROR: Token not found in .env")
     exit()
 
-# 2. Test the Embedding Model (This is what breaks your Upload)
+# 2. Test the Embedding Model
 print("\nTesting Embedding Model (sentence-transformers)...")
 try:
     embed_client = InferenceClient("sentence-transformers/all-MiniLM-L6-v2", token=token)
-    # Send a simple "Hello" to see if it works
     response = embed_client.feature_extraction("Hello world")
     print(" Embedding Model Works! Connection is good.")
 except Exception as e:
     print(f" Embedding Failed: {e}")
 
-# 3. Test the Chat Model (Mistral)
-print("\nTesting Chat Model (Mistral)...")
+# 3. Test the Chat Model (Gemma)
+print("\nTesting Chat Model (Google Gemma)...")
 try:
-    llm_client = InferenceClient("mistralai/Mistral-7B-Instruct-v0.2", token=token)
-    response = llm_client.text_generation("Say hi", max_new_tokens=10)
-    print(f" Mistral Works! Response: {response}")
+    llm_client = InferenceClient("google/gemma-2-2b-it", token=token)
+    
+    # FIX: Use chat_completion instead of text_generation
+    messages = [
+        {"role": "user", "content": "Say hi"}
+    ]
+    response = llm_client.chat_completion(messages, max_tokens=10)
+    
+    # Extract the answer correctly from the chat response object
+    answer = response.choices[0].message.content
+    print(f" Gemma Works! Response: {answer}")
+
 except Exception as e:
-    print(f" Mistral Failed: {e}")
+    print(f" Gemma Failed: {e}")

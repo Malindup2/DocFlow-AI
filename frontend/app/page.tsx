@@ -2,9 +2,9 @@
 
 import { useState, useRef, FormEvent, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  FileText, Send, Upload, X, Menu, Sparkles,
-  Bot, User, ChevronRight, Loader2, FileUp
+import { 
+  FileText, Send, Upload, X, Menu, 
+  Bot, User, ChevronRight, Loader2, FileUp 
 } from 'lucide-react';
 
 interface Message {
@@ -28,11 +28,10 @@ export default function Home() {
   const [question, setQuestion] = useState('');
   const [isAsking, setIsAsking] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom of chat
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isAsking]);
@@ -62,15 +61,7 @@ export default function Home() {
       const data = await response.json();
       setUploadStatus('success');
       setUploadMessage(`Ready! ${data.chunks} chunks indexed.`);
-
-      // Add initial greeting
-      setMessages([
-        {
-          role: 'assistant',
-          content: `I've processed "${selectedFile.name}". What would you like to know?`,
-          timestamp: new Date()
-        }
-      ]);
+      
     } catch (error) {
       setUploadStatus('error');
       setUploadMessage('Upload failed. Please try again.');
@@ -83,10 +74,10 @@ export default function Home() {
     if (selectedFile) handleFileUpload(selectedFile);
   };
 
-  const handleAskQuestion = async (e: FormEvent, overrideQuestion?: string) => {
+  const handleAskQuestion = async (e: FormEvent | null, overrideQuestion?: string) => {
     if (e) e.preventDefault();
     const q = overrideQuestion || question;
-
+    
     if (!q.trim() || uploadStatus !== 'success') return;
 
     const userMessage: Message = {
@@ -99,9 +90,21 @@ export default function Home() {
     setIsAsking(true);
 
     try {
-      const response = await fetch(`http://127.0.0.1:8000/ask?query=${encodeURIComponent(q)}`, {
+     
+      const response = await fetch('http://127.0.0.1:8000/ask', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        
+        body: JSON.stringify({ query: q }), 
       });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        console.error("Backend Error:", errData);
+        throw new Error('Failed to get answer');
+      }
 
       const data = await response.json();
       setMessages(prev => [...prev, { role: 'assistant', content: data.answer, timestamp: new Date() }]);
@@ -117,18 +120,59 @@ export default function Home() {
 
   return (
     <div className="flex h-screen bg-black text-gray-100 font-sans overflow-hidden selection:bg-white/20">
+      <style>{`
+        @keyframes shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+        .animate-shimmer {
+          animation: shimmer 3s linear infinite;
+        }
+        
+        @keyframes border-rotate {
+          0% { --angle: 0deg; }
+          100% { --angle: 360deg; }
+        }
+        
+        @property --angle {
+          syntax: '<angle>';
+          initial-value: 0deg;
+          inherits: false;
+        }
 
-      {/* ==== Sidebar (Glassmorphism + Enhanced PDF View) ==== */}
+        .pdf-window {
+          position: relative;
+          background: #0f0f0f;
+          border-radius: 1rem;
+          z-index: 10;
+        }
+
+        .thinking-border::after, .thinking-border::before {
+          content: '';
+          position: absolute;
+          inset: -2px;
+          border-radius: 18px;
+          background: conic-gradient(from var(--angle), transparent 50%, rgba(255,255,255,0.8), transparent);
+          z-index: -1;
+          animation: border-rotate 4s linear infinite;
+        }
+        
+        .thinking-border::before {
+           filter: blur(8px);
+           opacity: 0.5;
+        }
+      `}</style>
+
+      {/* ==== Sidebar ==== */}
       <AnimatePresence mode="wait">
         {sidebarOpen && (
           <motion.div
             initial={{ x: -320, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: -320, opacity: 0 }}
-            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }} // smooth easeOut
+            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
             className="w-[400px] flex-shrink-0 border-r border-white/10 bg-[#0a0a0a] flex flex-col relative z-20 shadow-2xl"
           >
-            {/* Sidebar Header */}
             <div className="p-6 border-b border-white/5">
               <div className="flex items-center gap-3 mb-6">
                 <h1 className="text-2xl font-bold bg-gradient-to-r from-white via-gray-400 to-gray-600 bg-clip-text text-transparent tracking-tight">
@@ -136,7 +180,6 @@ export default function Home() {
                 </h1>
               </div>
 
-              {/* Upload Button */}
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploadStatus === 'uploading'}
@@ -154,43 +197,33 @@ export default function Home() {
                 </span>
               </button>
 
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf"
-                onChange={handleFileChange}
-                className="hidden"
-              />
+              <input ref={fileInputRef} type="file" accept=".pdf" onChange={handleFileChange} className="hidden" />
             </div>
 
-            {/* Sidebar Content / PDF Preview */}
             <div className="flex-1 overflow-hidden p-4 flex flex-col">
               {file ? (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="flex-1 flex flex-col h-full rounded-2xl border border-white/10 bg-white/5 overflow-hidden"
+                  className={`flex-1 flex flex-col h-full overflow-hidden relative pdf-window
+                    ${isAsking ? 'thinking-border' : 'border border-white/10'}
+                  `}
                 >
                   <div className="p-3 bg-white/5 border-b border-white/5 flex items-center gap-2">
                     <FileText className="w-4 h-4 text-gray-400" />
                     <span className="text-xs font-medium text-gray-300 truncate">{file.name}</span>
                   </div>
-
-                  {/* PDF Embed - Fits available space */}
-                  <div className="flex-1 bg-gray-900 relative group">
-                    <embed
-                      src={URL.createObjectURL(file)}
-                      type="application/pdf"
-                      className="w-full h-full"
-                    />
-                    {/* Overlay for very small screens or if embed fails visual check */}
+                  
+                  <div className="flex-1 bg-gray-900 relative group rounded-b-2xl overflow-hidden">
+                    {/* Local Object URL for Preview */}
+                    <embed src={URL.createObjectURL(file)} type="application/pdf" className="w-full h-full" />
                     {uploadStatus === 'uploading' && (
-                      <div className="absolute inset-0 bg-black/80 flex items-center justify-center backdrop-blur-sm z-10">
-                        <div className="flex flex-col items-center gap-3">
-                          <Loader2 className="w-8 h-8 animate-spin text-white/50" />
-                          <p className="text-sm text-gray-400 font-light tracking-wide animate-pulse">Processing Vector Embeddings...</p>
-                        </div>
-                      </div>
+                       <div className="absolute inset-0 bg-black/80 flex items-center justify-center backdrop-blur-sm z-10">
+                          <div className="flex flex-col items-center gap-3">
+                             <Loader2 className="w-8 h-8 animate-spin text-white/50" />
+                             <p className="text-sm text-gray-400 font-light tracking-wide animate-pulse">Processing Vector Embeddings...</p>
+                          </div>
+                       </div>
                     )}
                   </div>
                 </motion.div>
@@ -204,82 +237,42 @@ export default function Home() {
                 </div>
               )}
             </div>
-
-            {/* Footer */}
             <div className="p-4 border-t border-white/5 text-center">
-              <p className="text-[10px] uppercase tracking-widest text-gray-600">
-                Secure • Private • AI Powered
-              </p>
+               <p className="text-[10px] uppercase tracking-widest text-gray-600">Secure • Private • AI Powered</p>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* ==== Main Chat Area ==== */}
+      {/* ==== Chat Area ==== */}
       <div className="flex-1 flex flex-col relative bg-black">
-
-        {/* Top Navigation */}
         <div className="h-16 border-b border-white/10 flex items-center justify-between px-6 bg-black/50 backdrop-blur-md sticky top-0 z-10">
           <div className="flex items-center gap-4">
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 hover:text-white"
-            >
+            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white">
               {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
-            {!sidebarOpen && (
-              <span className="text-lg font-bold bg-gradient-to-r from-white via-gray-400 to-gray-600 bg-clip-text text-transparent">
-                DocFlow AI
-              </span>
-            )}
+            {!sidebarOpen && <span className="text-lg font-bold bg-gradient-to-r from-white via-gray-400 to-gray-600 bg-clip-text text-transparent">DocFlow AI</span>}
           </div>
-
           <div className="flex items-center gap-3">
-            <span className={`w-2 h-2 rounded-full ${uploadStatus === 'success' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-gray-600'}`} />
-            <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-              {uploadStatus === 'success' ? 'System Active' : 'System Idle'}
-            </span>
+             <span className={`w-2 h-2 rounded-full ${uploadStatus === 'success' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-gray-600'}`} />
+             <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">{uploadStatus === 'success' ? 'System Active' : 'System Idle'}</span>
           </div>
         </div>
 
-        {/* Chat Content */}
         <div className="flex-1 overflow-y-auto p-4 md:p-8 scroll-smooth scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
           {messages.length === 0 ? (
-            /* Welcome / Empty State */
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, ease: "easeOut" }}
-              className="h-full flex flex-col items-center justify-center max-w-2xl mx-auto text-center"
-            >
-              <div className="w-20 h-20 bg-gradient-to-tr from-gray-800 to-black border border-white/10 rounded-3xl flex items-center justify-center mb-8 shadow-2xl shadow-white/5">
-                <Sparkles className="w-10 h-10 text-white" />
-              </div>
-
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, ease: "easeOut" }} className="h-full flex flex-col items-center justify-center max-w-2xl mx-auto text-center">
               <h1 className="text-4xl md:text-5xl font-bold text-white mb-6 tracking-tight">
                 Welcome to <span className="bg-gradient-to-r from-white via-gray-300 to-gray-600 bg-clip-text text-transparent">DocFlow AI</span>
               </h1>
-
-              <p className="text-lg text-gray-400 mb-10 leading-relaxed max-w-lg">
-                Upload your PDF documents and instantly start a conversation.
-                Extract insights, summaries, and answers in seconds.
-              </p>
-
-              {/* Suggestions Capsules */}
+              <p className="text-lg text-gray-400 mb-10 leading-relaxed max-w-lg">Upload your PDF documents and instantly start a conversation. Extract insights, summaries, and answers in seconds.</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-lg">
                 {SUGGESTIONS.map((suggestion, idx) => (
                   <button
                     key={idx}
-                    onClick={() => {
-                      if (uploadStatus === 'success') {
-                        setQuestion(suggestion);
-                        handleAskQuestion(null as any, suggestion);
-                      }
-                    }}
+                    onClick={() => { if (uploadStatus === 'success') { setQuestion(suggestion); handleAskQuestion(null, suggestion); } }}
                     disabled={uploadStatus !== 'success'}
-                    className="p-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 
-                             text-left text-sm text-gray-300 transition-all hover:border-white/20 
-                             disabled:opacity-50 disabled:cursor-not-allowed group flex items-center justify-between"
+                    className="p-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-left text-sm text-gray-300 transition-all hover:border-white/20 disabled:opacity-50 disabled:cursor-not-allowed group flex items-center justify-between"
                   >
                     {suggestion}
                     <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity text-gray-400" />
@@ -288,45 +281,23 @@ export default function Home() {
               </div>
             </motion.div>
           ) : (
-            /* Message List */
             <div className="space-y-8 max-w-3xl mx-auto pb-10">
               {messages.map((msg, idx) => (
-                <motion.div
-                  key={idx}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={`flex gap-5 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
-                >
-                  <div className={`
-                    w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 shadow-lg
-                    ${msg.role === 'user'
-                      ? 'bg-white text-black'
-                      : 'bg-gradient-to-br from-gray-700 to-black border border-white/10 text-white'}
-                  `}>
+                <motion.div key={idx} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`flex gap-5 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 shadow-lg ${msg.role === 'user' ? 'bg-white text-black' : 'bg-gradient-to-br from-gray-700 to-black border border-white/10 text-white'}`}>
                     {msg.role === 'user' ? <User className="w-5 h-5" /> : <Bot className="w-5 h-5" />}
                   </div>
-
-                  <div className={`
-                    relative px-6 py-4 rounded-2xl text-sm leading-relaxed shadow-md max-w-[85%]
-                    ${msg.role === 'user'
-                      ? 'bg-white text-gray-900 rounded-tr-sm'
-                      : 'bg-[#1a1a1a] border border-white/10 text-gray-200 rounded-tl-sm'}
-                  `}>
+                  <div className={`relative px-6 py-4 rounded-2xl text-sm leading-relaxed shadow-md max-w-[85%] ${msg.role === 'user' ? 'bg-white text-gray-900 rounded-tr-sm' : 'bg-[#1a1a1a] border border-white/10 text-gray-200 rounded-tl-sm'}`}>
                     {msg.content}
                   </div>
                 </motion.div>
               ))}
-
               {isAsking && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-5">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-700 to-black border border-white/10 flex items-center justify-center">
-                    <Bot className="w-5 h-5 text-white" />
-                  </div>
-                  <div className="px-6 py-4 rounded-2xl bg-[#1a1a1a] border border-white/10 rounded-tl-sm flex items-center gap-2">
-                    <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" />
-                    <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-75" />
-                    <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-150" />
-                  </div>
+                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-700 to-black border border-white/10 flex items-center justify-center"><Bot className="w-5 h-5 text-white" /></div>
+                   <div className="px-6 py-4 rounded-2xl bg-[#1a1a1a] border border-white/10 rounded-tl-sm flex items-center">
+                      <span className="italic text-transparent bg-clip-text bg-gradient-to-r from-gray-500 via-gray-200 to-gray-500 bg-[length:200%_100%] animate-shimmer">Thinking...</span>
+                   </div>
                 </motion.div>
               )}
               <div ref={messagesEndRef} />
@@ -334,35 +305,27 @@ export default function Home() {
           )}
         </div>
 
-        {/* Input Area */}
         <div className="p-6 bg-gradient-to-t from-black via-black to-transparent">
           <div className="max-w-3xl mx-auto relative">
-            <form onSubmit={(e) => handleAskQuestion(e)} className="relative group">
-              <div className="absolute -inset-0.5 bg-gradient-to-r from-gray-700 to-gray-600 rounded-2xl opacity-20 group-hover:opacity-40 transition duration-500 blur"></div>
-              <div className="relative flex items-center bg-[#0a0a0a] rounded-2xl border border-white/10 focus-within:border-white/20 transition-all shadow-xl">
-                <input
-                  type="text"
-                  value={question}
-                  onChange={(e) => setQuestion(e.target.value)}
-                  placeholder={uploadStatus === 'success' ? "Ask anything about your document..." : "Upload a PDF to start chatting..."}
-                  disabled={uploadStatus !== 'success' || isAsking}
-                  className="flex-1 bg-transparent border-none text-white placeholder-gray-500 px-6 py-4 focus:ring-0 outline-none disabled:cursor-not-allowed"
-                />
-                <button
-                  type="submit"
-                  disabled={!question.trim() || isAsking || uploadStatus !== 'success'}
-                  className="mr-3 p-3 rounded-xl bg-white text-black hover:bg-gray-200 disabled:bg-gray-800 disabled:text-gray-500 transition-all transform active:scale-95 disabled:hover:scale-100"
-                >
-                  <Send className="w-5 h-5" />
-                </button>
-              </div>
-            </form>
-            <p className="text-center text-xs text-gray-600 mt-3 font-light">
-              AI can make mistakes. Verify important information.
-            </p>
+             <form onSubmit={(e) => handleAskQuestion(e)} className="relative group">
+               <div className="absolute -inset-0.5 bg-gradient-to-r from-gray-700 to-gray-600 rounded-2xl opacity-20 group-hover:opacity-40 transition duration-500 blur"></div>
+               <div className="relative flex items-center bg-[#0a0a0a] rounded-2xl border border-white/10 focus-within:border-white/20 transition-all shadow-xl">
+                 <input
+                   type="text"
+                   value={question}
+                   onChange={(e) => setQuestion(e.target.value)}
+                   placeholder={uploadStatus === 'success' ? "Ask anything about your document..." : "Upload a PDF to start chatting..."}
+                   disabled={uploadStatus !== 'success' || isAsking}
+                   className="flex-1 bg-transparent border-none text-white placeholder-gray-500 px-6 py-4 focus:ring-0 outline-none disabled:cursor-not-allowed"
+                 />
+                 <button type="submit" disabled={!question.trim() || isAsking || uploadStatus !== 'success'} className="mr-3 p-3 rounded-xl bg-white text-black hover:bg-gray-200 disabled:bg-gray-800 disabled:text-gray-500 transition-all transform active:scale-95 disabled:hover:scale-100">
+                   <Send className="w-5 h-5" />
+                 </button>
+               </div>
+             </form>
+             <p className="text-center text-xs text-gray-600 mt-3 font-light">AI can make mistakes. Verify important information.</p>
           </div>
         </div>
-
       </div>
     </div>
   );
