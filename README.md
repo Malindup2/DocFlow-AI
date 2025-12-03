@@ -105,3 +105,6 @@ npm run dev
 ```
 
 Frontend runs at: `http://localhost:3000`
+
+<img width="1918" height="903" alt="image" src="https://github.com/user-attachments/assets/d1029570-7340-4a57-8419-e52e54567d03" />
+
