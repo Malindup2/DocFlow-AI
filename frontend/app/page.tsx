@@ -4,13 +4,14 @@ import { useState, useRef, FormEvent, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   FileText, Send, Upload, X, Menu, 
-  Bot, User, ChevronRight, Loader2, FileUp 
+  Bot, User, ChevronRight, Loader2, FileUp, BookOpenText 
 } from 'lucide-react';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  citations?: Citation[];
 }
 
 const SUGGESTIONS = [
@@ -19,6 +20,11 @@ const SUGGESTIONS = [
   "List the main topics covered",
   "Explain the conclusion"
 ];
+
+interface Citation {
+  page: number;
+  snippet: string;
+}
 
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
@@ -107,7 +113,7 @@ export default function Home() {
       }
 
       const data = await response.json();
-      setMessages(prev => [...prev, { role: 'assistant', content: data.answer, timestamp: new Date() }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: data.answer, timestamp: new Date(), citations: data.citations || [] }]);
     } catch (error) {
       setMessages(prev => [
         ...prev,
@@ -289,6 +295,22 @@ export default function Home() {
                   </div>
                   <div className={`relative px-6 py-4 rounded-2xl text-sm leading-relaxed shadow-md max-w-[85%] ${msg.role === 'user' ? 'bg-white text-gray-900 rounded-tr-sm' : 'bg-[#1a1a1a] border border-white/10 text-gray-200 rounded-tl-sm'}`}>
                     {msg.content}
+                    {msg.role === 'assistant' && msg.citations && msg.citations.length > 0 && (
+                      <div className="mt-4 border-t border-white/10 pt-3">
+                        <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.16em] text-gray-500 mb-2">
+                          <BookOpenText className="w-3 h-3" />
+                          Sources
+                        </div>
+                        <div className="grid sm:grid-cols-2 gap-2">
+                          {msg.citations.map((cite, citeIdx) => (
+                            <div key={citeIdx} className="p-3 rounded-xl bg-white/5 border border-white/10">
+                              <div className="text-[11px] font-semibold text-gray-300 mb-1">Page {cite.page}</div>
+                              <p className="text-xs text-gray-400 leading-relaxed line-clamp-3">{cite.snippet}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               ))}

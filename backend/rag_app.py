@@ -1,4 +1,6 @@
 import os
+from typing import List, Dict, Any
+
 import faiss
 import numpy as np
 from fastapi import FastAPI, UploadFile
@@ -24,10 +26,9 @@ llm_client = InferenceClient(
     token=HF_TOKEN
 )
 
-# FAISS vector index
 EMBED_DIM = 384
 index = faiss.IndexFlatL2(EMBED_DIM)
-chunks_store = []
+chunks_store: List[Dict[str, Any]] = []
 
 class QueryRequest(BaseModel):
     query: str
@@ -50,16 +51,29 @@ def embed_text(text: str):
 
 def extract_pdf_text(pdf_file):
     reader = PdfReader(pdf_file)
-    text = ""
-    for page in reader.pages:
-        t = page.extract_text()
-        if t:
-            text += t
-    return text
+    pages = []
+    for idx, page in enumerate(reader.pages):
+        t = page.extract_text() or ""
+        pages.append({"page": idx + 1, "text": t})
+    return pages
 
 
-def chunk_text(text, size=500):
-    return [text[i:i+size] for i in range(0, len(text), size)]
+def chunk_page_text(page_text: str, page_number: int, size: int = 500, overlap: int = 100):
+    """
+    Create overlapping chunks so we can cite with page metadata.
+    """
+    step = size - overlap
+    chunks = []
+    for start in range(0, len(page_text), step):
+        chunk = page_text[start:start + size]
+        if chunk.strip():
+            chunks.append({
+                "text": chunk,
+                "page": page_number,
+                "start": start,
+                "end": start + len(chunk)
+            })
+    return chunks
 
 
 @app.post("/upload")
@@ -68,19 +82,21 @@ async def upload(file: UploadFile):
     chunks_store = []
     index = faiss.IndexFlatL2(EMBED_DIM)
 
-    pdf_text = extract_pdf_text(file.file)
+    pages = extract_pdf_text(file.file)
 
-    if not pdf_text.strip():
+    if not any(p["text"].strip() for p in pages):
         return {"status": "error", "message": "PDF has no readable text."}
 
-    chunks = chunk_text(pdf_text)
+    all_chunks = []
+    for page in pages:
+        all_chunks.extend(chunk_page_text(page["text"], page["page"]))
 
-    for c in chunks:
-        vec = embed_text(c)
+    for c in all_chunks:
+        vec = embed_text(c["text"])
         index.add(vec.reshape(1, -1))
         chunks_store.append(c)
 
-    return {"status": "ok", "chunks": len(chunks)}
+    return {"status": "ok", "chunks": len(all_chunks)}
 
 #  Ask Question
 @app.post("/ask")
@@ -97,7 +113,8 @@ async def ask(request: QueryRequest):
     if not valid:
         return {"answer": "No relevant content found in document."}
 
-    context = "\n---\n".join([chunks_store[i] for i in valid])
+    context_chunks = [chunks_store[i] for i in valid]
+    context = "\n---\n".join([f"[p{c['page']}] {c['text']}" for c in context_chunks])
 
     prompt = f"""
 Use ONLY this context to answer:
@@ -106,8 +123,9 @@ Use ONLY this context to answer:
 
 Question: {query}
 
-If answer not found in context, say:
-"I couldn't find that in the document."
+Requirements:
+- Cite sources inline using the bracket tags provided (e.g., [p2]).
+- If the answer is not in the context, say "I couldn't find that in the document."
 
 Answer:
 """
@@ -118,4 +136,11 @@ Answer:
     )
 
     answer_text = resp["choices"][0]["message"]["content"]
-    return {"answer": answer_text}
+    citations = [
+        {
+            "page": c["page"],
+            "snippet": c["text"][:240].strip()
+        }
+        for c in context_chunks
+    ]
+    return {"answer": answer_text, "citations": citations}
